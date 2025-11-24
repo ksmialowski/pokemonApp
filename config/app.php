@@ -124,4 +124,5 @@ return [
     ],
 
     'secret_key' => env('APP_SECRET_KEY', ''),
+    'pokemon_api_url' => env('POKEMON_API_URL', 'https://pokeapi.co/api/v2/pokemon/'),
 ];
