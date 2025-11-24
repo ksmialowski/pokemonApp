@@ -11,5 +11,6 @@ Route::prefix('v1')->group(function () {
     Route::middleware(SecretApiKey::class)->group(function () {
         Route::apiResource('banned', BannedPokemonController::class)
             ->only(['index', 'store', 'destroy']);
+        Route::apiResource('pokemon', BannedPokemonController::class);
     });
 });

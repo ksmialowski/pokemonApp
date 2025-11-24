@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\BannedPokemon;
+use App\Models\Pokemon;
 use Illuminate\Support\Facades\Http;
 
 class PokemonService
@@ -22,23 +23,43 @@ class PokemonService
             ->whereIn('name', $uniquePokemonNames->toArray())
             ->pluck('name');
 
-        $notBannedPokemons = $uniquePokemonNames->diff($bannedPokemons);
+        $allowedPokemons = $uniquePokemonNames->diff($bannedPokemons);
 
-        if ($notBannedPokemons->isEmpty()) {
+        if ($allowedPokemons->isEmpty()) {
             return [];
         }
 
-        $responses = Http::pool(fn($pool) => $notBannedPokemons->map(fn($name) => $pool->get($this->apiUrl . $name)));
+        $localPokemons = Pokemon::query()
+            ->whereIn('name', $allowedPokemons)
+            ->get()
+            ->map(fn($pokemon) => (object) [
+                'name' => $pokemon->name,
+                'height' => $pokemon->height,
+                'weight' => $pokemon->weight,
+                'is_custom' => true,
+                'source' => 'local_custom',
+            ]);
 
-        return collect($responses)
-            ->filter(fn($response) => $response && $response->successful())
-            ->map(function ($response) {
-                $apiData = $response->json();
-                return (object) [
-                    'name' => $apiData['name'],
-                    'height' => $apiData['height'],
-                    'weight' => $apiData['weight'],
-                ];
-            });
+
+        $apiResults = collect([]);
+        if ($allowedPokemons->diff($localPokemons->pluck('name'))->isNotEmpty()) {
+            $responses = Http::pool(fn($pool) => $allowedPokemons->map(fn($name) => $pool->get($this->apiUrl . $name)));
+
+            $apiResults = collect($responses)
+                ->filter(fn($response) => $response && $response->successful())
+                ->map(function ($response) {
+                    $apiData = $response->json();
+                    return (object) [
+                        'name' => $apiData['name'],
+                        'height' => $apiData['height'],
+                        'weight' => $apiData['weight'],
+                    ];
+                });
+        }
+
+        return [
+            ...$localPokemons->toArray(),
+            ...$apiResults->toArray(),
+        ];
     }
 }
